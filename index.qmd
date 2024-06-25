@@ -27,25 +27,20 @@ scrolling: true
 
 ```{r mapa}
 #| title: Registros de biodiversidad en Colombia, 2024
-
 library(tidyverse)
 library(leaflet)
 library(sf)
-
 base <- read_delim("datos/filtros_aplicados_2024.csv", 
                    delim = "\t", escape_double = FALSE, 
                    trim_ws = TRUE)
 shp <- read_sf("datos/shp_dptos/MGN_DPTO_POLITICO.shp")
 codigos <- readxl::read_xlsx("datos/codigos_dane_dptos.xlsx")
-
 conteo_dptos <- base %>% 
   group_by(stateProvince) %>% 
   count() %>% 
   na.omit() %>% 
   ungroup() 
-
 conteo_dptos <- left_join(x = conteo_dptos, y = codigos, by = c("stateProvince" = "deptos"))
-
 shp <- left_join(x=shp, y = conteo_dptos, by = c("DPTO_CCDGO" = "codigo"))
 shp$geometry <- st_transform(x = shp$geometry, crs = "WGS84")
 etiquetas <- sprintf("%s <br> <strong>Total de registros de especies:<strong> %g",
@@ -56,7 +51,6 @@ segmentos <- colorBin(bins = 4, palette = c("#A93226","#CA6F1E","#D4AC0D", "#28B
 escala <- c("#A93226","#CA6F1E","#D4AC0D", "#28B463")
 shp <- shp %>% 
   mutate(colores = segmentos(n), Nivel = case_when(colores == "#A93226" ~"Bajo", colores == "#CA6F1E" ~"Medio-bajo", colores == "#D4AC0D" ~"Medio-alto", colores== "#28B463" ~"Alto"))
-
 mapa <- leaflet() %>% 
   addProviderTiles(providers$CartoDB.Positron) %>% 
   setView(lng = -72.958, lat = 4.095, zoom = 5.1)  %>% 
@@ -75,16 +69,13 @@ mapa <- leaflet() %>%
   addLayersControl(overlayGroups = c("Registros", "Departamentos"),
                    options = layersControlOptions(collapsed = FALSE)) %>% 
   addLegend(data = shp, position = "bottomright", values = ~Nivel, title = "Nivel de registro <br/> por departamento", opacity = 0.5, colors = escala, labels = c("Bajo","Medio-bajo", "Medio-alto", "Alto"))
-  
 mapa
 ```
 
 ## Row {height="30%"}
-
 En lo que va corrido del año, se han registrado 36399 observaciones de especies. La brecha de registros entre departamentos es bastante amplia, y deja como resultado departamentos como Antioquia y Cundinamarca, con una cantidad de datos significativamente mayor en comparación con departamentos como Amazonas, Caquetá o Putumayo, aún cuando estos últimos cuentan con territorios mucho mayores en extensión, y es presumible que cuenten con mayor cantidad y diversidad de especies.
 
 ### Row
-
 ```{r}
 #| title: Cantidad de registros por reino, 2024
 conteo <- base %>% 
