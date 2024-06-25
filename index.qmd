@@ -1,0 +1,195 @@
+---
+title: "Terri-Innova."
+author: "Innovación política desde el territorio"
+format:
+  dashboard:
+    orientation: columns
+logo: logo_1.png
+theme: Flatly
+scrolling: true
+---
+
+# Intro
+
+## Row {width="60%"}
+
+<center>**Descubrir y redescubrir.** <br/> **Una historia de biodiversidad desde el territorio**</center>
+
+<p>Hola, soy una rana de la especie <i>Hyloscirtus larinopygion</i>, conocida también como rana de torrente pastusa. Mi hábitat está ubicada entre Colombia y Ecuador, y disfruto especialmente vivir en el bosque andino, boque montano e incluso en el páramo. Hay varios departamentos que tienen estos ecosistemas y características geográficas-topológicas. En la región pacífica, que se extiende hasta Ecuador, he logrado sobrevivir, aunque constantemente me encuentro amenazada por el desplazamiento de la frontera agrícola, la deforestación e incluso por la sequía de los riachuelos donde me reproduzco. Por ejemplo, hace unos cuantos años me desaparecí por un tiempo de un territorio en el que simpre había estado, y cuando pensaron que ya no volvería, regresé. Esto fue posible ya que unos campesinos decidieron dar todo el cuidado posible al hábitat en el que yo solía vivir. Mi historia no es más que una entre muchas otras, que demuestra que si cuidamos el campo, invertimos tiempo y dinero para proteger los ecosistemas en lugar de dañarlos, y damos importancia a lo que nuestros campesinos, indigenas, afros y defensores del medio ambiente hacen, podemos alcanzar grandes logros en la conservación, pero también en el continuo crecimiento de nuesto conocimiento de la biodiversidad.</p>
+
+## Row {width="40%"}
+
+![](fondo_1.jpeg)
+
+# Registros 2024
+
+## Row {width="60%"}
+
+```{r mapa}
+#| title: Registros de biodiversidad en Colombia, 2024
+
+library(tidyverse)
+library(leaflet)
+library(sf)
+
+base <- read_delim("datos/filtros_aplicados_2024.csv", 
+                   delim = "\t", escape_double = FALSE, 
+                   trim_ws = TRUE)
+shp <- read_sf("datos/shp_dptos/MGN_DPTO_POLITICO.shp")
+codigos <- readxl::read_xlsx("datos/codigos_dane_dptos.xlsx")
+
+conteo_dptos <- base %>% 
+  group_by(stateProvince) %>% 
+  count() %>% 
+  na.omit() %>% 
+  ungroup() 
+
+conteo_dptos <- left_join(x = conteo_dptos, y = codigos, by = c("stateProvince" = "deptos"))
+
+shp <- left_join(x=shp, y = conteo_dptos, by = c("DPTO_CCDGO" = "codigo"))
+shp$geometry <- st_transform(x = shp$geometry, crs = "WGS84")
+etiquetas <- sprintf("%s <br> <strong>Total de registros de especies:<strong> %g",
+                     shp$stateProvince, shp$n) %>% 
+  lapply(htmltools::HTML)
+segmentos <- colorBin(bins = 4, palette = c("#A93226","#CA6F1E","#D4AC0D", "#28B463"),
+                      domain = shp$n)
+escala <- c("#A93226","#CA6F1E","#D4AC0D", "#28B463")
+shp <- shp %>% 
+  mutate(colores = segmentos(n), Nivel = case_when(colores == "#A93226" ~"Bajo", colores == "#CA6F1E" ~"Medio-bajo", colores == "#D4AC0D" ~"Medio-alto", colores== "#28B463" ~"Alto"))
+
+mapa <- leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  setView(lng = -72.958, lat = 4.095, zoom = 5.1)  %>% 
+  addMarkers(data = base, lng = ~decimalLongitude, lat = ~decimalLatitude, 
+             clusterOptions = markerClusterOptions(),
+             popup = paste("Especie:", base$verbatimScientificName, '<br/>',
+                           "Reino:", base$kingdom, '<br/>',
+                           "Fecha de registro:", base$eventDate, '<br/>',
+                           "Institución que registra:", base$institutionCode, '<br/>',
+                           "Tipo de observación:", base$basisOfRecord),
+             group = "Registros") %>% 
+  addPolygons(data = shp, weight = 2, color = "gray",
+            label = etiquetas,
+            group = "Departamentos",
+            fillColor = ~colores, fillOpacity = 0.5) %>% 
+  addLayersControl(overlayGroups = c("Registros", "Departamentos"),
+                   options = layersControlOptions(collapsed = FALSE)) %>% 
+  addLegend(data = shp, position = "bottomright", values = ~Nivel, title = "Nivel de registro <br/> por departamento", opacity = 0.5, colors = escala, labels = c("Bajo","Medio-bajo", "Medio-alto", "Alto"))
+  
+mapa
+```
+
+## Row {height="30%"}
+
+En lo que va corrido del año, se han registrado 36399 observaciones de especies. La brecha de registros entre departamentos es bastante amplia, y deja como resultado departamentos como Antioquia y Cundinamarca, con una cantidad de datos significativamente mayor en comparación con departamentos como Amazonas, Caquetá o Putumayo, aún cuando estos últimos cuentan con territorios mucho mayores en extensión, y es presumible que cuenten con mayor cantidad y diversidad de especies.
+
+### Row
+
+```{r}
+#| title: Cantidad de registros por reino, 2024
+conteo <- base %>% 
+  group_by(kingdom) %>% 
+  count()
+
+registros_reino <- ggplot(conteo, aes(x=kingdom, y = n, fill = kingdom))+
+  geom_col() +
+  geom_text(aes(label = n), vjust = -0.1)+
+  theme_minimal() +
+  labs(y="Número de registros", x = "Reino") +
+  theme(legend.position = "none", panel.grid = element_blank())
+registros_reino
+```
+
+# Herramientas para un diagnóstico
+
+## Row
+
+```{r diagnostico}
+#| title: Capas de datos para un diagnóstico
+
+library(tidyverse)
+library(leaflet)
+library(leaflet.extras)
+library(sf)
+
+shp <- read_sf("datos/shp_dptos/MGN_DPTO_POLITICO.shp")
+codigos <- readxl::read_xlsx("datos/codigos_dane_dptos.xlsx")
+asesinatos_ambientalistas <- readr::read_csv2("datos/asesinatos_ambientalistas.csv")
+shp <- left_join(x = shp, y = asesinatos_ambientalistas, by = c("DPTO_CCDGO" = "cod"))
+shp$geometry <- st_transform(x = shp$geometry, crs = "WGS84")
+escala <- c("#A93226","#CA6F1E","#D4AC0D", "#28B463")
+segmentos_1 <- colorBin(bins = 2, palette = c("#CA6F1E","#A93226"),
+                      domain = shp$numero)
+shp <- shp %>% 
+  mutate(colores_1 = segmentos_1(numero))
+etiquetas_1 <- sprintf("%s <br> <strong>Líderes ambientalistas asesinados desde 2016:<strong> %g", shp$DPTO_CNMBR, shp$numero) %>% 
+  lapply(htmltools::HTML)
+mapa_1 <- leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(lng = -72.958, lat = 4.095, zoom = 5.1) %>%
+  addDrawToolbar(position = "topleft") %>% 
+  addPolygons(data = shp, weight = 2, color = "gray", 
+              label = etiquetas_1,
+              group = "Asesinatos de líderes ambientales",
+              fillColor = ~colores_1, fillOpacity = 0.5) %>%
+  addLayersControl(overlayGroups = c("Asesinatos de líderes ambientales", "Registros", "Departamentos","Licencias de hidrocarburos", "Licencias de infraestructura", "Conflictos de uso del suelo", "Humedales", "Áreas de gestión de autoridades ambientales", "Parques Nacionales Naturales", "Zonas de reserva campesina", "Acciones bélicas registradas en 2023", "Zonas con presencia de minas antipersona", "Registro histórico de biodiversidad por departamento", "Especies identificadas por departamento", "Especies estimadas por departamento"),
+                   options = layersControlOptions(collapsed = FALSE))
+  
+  
+mapa_1
+```
+
+# Construyamos
+
+## Row
+
+```{r}
+library(shiny)
+library(leaflet)
+
+ui <- fluidPage(
+  titlePanel("Ingresa tus observaciones"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      textInput("especie", "Especie:"),
+      numericInput("lat", "Latitud:", value = 0, min = -90, max = 90),
+      numericInput("lng", "Longitud:", value = 0, min = -180, max = 180),
+      actionButton("add", "Agregar registro")
+    ),
+    
+    mainPanel(
+      leafletOutput("map")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  data_file <- "data/user_data.csv"
+  if (file.exists(data_file)) {
+    user_data <- read.csv(data_file, stringsAsFactors = FALSE)
+  } else {
+    user_data <- data.frame(especie = character(), lat = numeric(), lng = numeric(),
+                            stringsAsFactors = FALSE)
+  }
+  
+  observeEvent(input$add, {
+    nuevo_registro <- data.frame(especie = input$especie, lat = input$lat, lng = input$lng,
+                                 stringsAsFactors = FALSE)
+    user_data <- rbind(user_data, nuevo_registro)
+    write.csv(user_data, data_file, row.names = FALSE)
+    leafletProxy("map") %>% 
+      addMarkers(lng = nuevo_registro$lng,
+                 lat = nuevo_registro$lat,
+                 popup = nuevo_registro$especie)
+  })
+  
+  output$map <- renderLeaflet({
+    leaflet() %>%
+      addTiles() %>%
+      setView(lng = -72.958, lat = 4.095, zoom = 5.1) %>% 
+      addMarkers(data = user_data, ~lng, ~lat, popup = ~especie)
+  })
+}
+shinyApp(ui, server)
+```
